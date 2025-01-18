@@ -1,0 +1,55 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
+// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+model User {
+  id                      String                    @id @default(cuid()) // Unique user ID
+  email                   String                    @unique
+  firstName               String
+  lastName                String
+  username                String
+  avatar                  String?
+  messages                Message[] // One-to-many relationship with Message
+  createdAt               DateTime                  @default(now())
+  ConversationParticipant ConversationParticipant[]
+}
+
+model Conversation {
+  id           String                    @id @default(cuid()) // Unique conversation ID
+  name         String?
+  participants ConversationParticipant[] // Many-to-many relationship
+  messages     Message[] // One-to-many relationship with Message
+  createdAt    DateTime                  @default(now())
+}
+
+model ConversationParticipant {
+  id             String       @id @default(cuid()) // Unique ID
+  userId         String
+  conversationId String
+  user           User         @relation(fields: [userId], references: [id])
+  conversation   Conversation @relation(fields: [conversationId], references: [id])
+
+  @@unique([userId, conversationId]) // Ensure a user can't join the same conversation twice
+}
+
+model Message {
+  id             String       @id @default(cuid()) // Unique message ID
+  content        String
+  senderId       String
+  conversationId String
+  sender         User         @relation(fields: [senderId], references: [id])
+  conversation   Conversation @relation(fields: [conversationId], references: [id])
+  createdAt      DateTime     @default(now())
+}
