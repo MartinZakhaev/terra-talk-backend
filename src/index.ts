@@ -30,6 +30,8 @@ app.get(
   cacheMiddleware,
   async (req, res) => {
     const { userId } = req.params;
+    const { page = 1, limit = 20 } = req.query;
+    const skip = (Number(page) - 1) * Number(limit);
 
     try {
       const conversations = await prisma.conversation.findMany({
@@ -76,10 +78,23 @@ app.get(
         orderBy: {
           updatedAt: "desc",
         },
-        take: 10,
+        take: Number(limit),
+        skip,
       });
 
-      res.json(conversations);
+      const total = await prisma.conversation.count({
+        where: {
+          participants: {
+            some: { userId },
+          },
+        },
+      });
+
+      res.json({
+        conversations,
+        hasMore: skip + conversations.length < total,
+        total,
+      });
     } catch (error) {
       console.error("Error fetching conversations:", error);
       res
