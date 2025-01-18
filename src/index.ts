@@ -3,6 +3,8 @@ import express from "express";
 import cors from "cors";
 import { createServer } from "http";
 import { Server } from "socket.io";
+import { cacheMiddleware } from "../middleware/cache";
+import redisClient from "../utils/redis";
 
 const app = express();
 const server = createServer(app);
@@ -19,68 +21,73 @@ app.use(
   })
 );
 
-app.get("/", (req, res) => {
-  res.send("Hello World!");
-});
+// app.get("/", (req, res) => {
+//   res.send("Hello World!");
+// });
 
-app.get("/api/users/:userId/conversations", async (req, res) => {
-  const { userId } = req.params;
+app.get(
+  "/api/users/:userId/conversations",
+  cacheMiddleware,
+  async (req, res) => {
+    const { userId } = req.params;
 
-  try {
-    const conversations = await prisma.conversation.findMany({
-      where: {
-        participants: {
-          some: { userId },
+    try {
+      const conversations = await prisma.conversation.findMany({
+        where: {
+          participants: {
+            some: { userId },
+          },
         },
-      },
-      include: {
-        participants: {
-          select: {
-            id: true,
-            userId: true,
-            user: {
-              select: {
-                firstName: true,
-                lastName: true,
-                username: true,
-                avatar: true,
+        include: {
+          participants: {
+            select: {
+              id: true,
+              userId: true,
+              user: {
+                select: {
+                  firstName: true,
+                  lastName: true,
+                  username: true,
+                  avatar: true,
+                },
+              },
+            },
+          },
+          messages: {
+            orderBy: {
+              createdAt: "desc",
+            },
+            take: 1,
+            select: {
+              id: true,
+              content: true,
+              createdAt: true,
+              senderId: true,
+              sender: {
+                select: {
+                  firstName: true,
+                  lastName: true,
+                  username: true,
+                },
               },
             },
           },
         },
-        messages: {
-          orderBy: {
-            createdAt: "desc",
-          },
-          take: 1,
-          select: {
-            id: true,
-            content: true,
-            createdAt: true,
-            senderId: true,
-            sender: {
-              select: {
-                firstName: true,
-                lastName: true,
-                username: true,
-              },
-            },
-          },
+        orderBy: {
+          updatedAt: "desc",
         },
-      },
-      orderBy: {
-        createdAt: "desc",
-      },
-    });
+        take: 10,
+      });
 
-    res.json(conversations);
-  } catch (error) {
-    console.error("Error fetching conversations:", error);
-    res
-      .status(500)
-      .json({ error: "An error occurred while fetching conversations" });
+      res.json(conversations);
+    } catch (error) {
+      console.error("Error fetching conversations:", error);
+      res
+        .status(500)
+        .json({ error: "An error occurred while fetching conversations" });
+    }
   }
-});
+);
 
 app.post("/api/conversations", async (req, res) => {
   const { inviterId, inviteeEmail } = req.body;
@@ -126,23 +133,27 @@ app.post("/api/conversations", async (req, res) => {
   }
 });
 
-app.get("/api/conversations/:conversationId/messages", async (req, res) => {
-  const { conversationId } = req.params;
+app.get(
+  "/api/conversations/:conversationId/messages",
+  cacheMiddleware,
+  async (req, res) => {
+    const { conversationId } = req.params;
 
-  try {
-    const messages = await prisma.message.findMany({
-      where: { conversationId },
-      include: { sender: true },
-      orderBy: { createdAt: "asc" },
-    });
+    try {
+      const messages = await prisma.message.findMany({
+        where: { conversationId },
+        include: { sender: true },
+        orderBy: { createdAt: "asc" },
+      });
 
-    res.json(messages);
-  } catch (error) {
-    res
-      .status(500)
-      .json({ error: "An error occurred while fetching messages" });
+      res.json(messages);
+    } catch (error) {
+      res
+        .status(500)
+        .json({ error: "An error occurred while fetching messages" });
+    }
   }
-});
+);
 
 app.post("/api/conversations/:conversationId/messages", async (req, res) => {
   const { conversationId } = req.params;
@@ -176,9 +187,15 @@ app.post("/api/conversations/:conversationId/messages", async (req, res) => {
 io.on("connection", (socket) => {
   // console.log(`A user connected ${socket.id}`);
 
-  socket.on("send_message", (message) => {
+  socket.on("send_message", async (message) => {
     // console.log(`Message from ${socket.id}: ${data.message}`);
     // io.emit("receive_message", data);
+    await redisClient.del(
+      `cache:GET:/api/conversations/${message.conversationId}/messages`
+    );
+    await redisClient.del(
+      `cache:GET:/api/users/${message.senderId}/conversations`
+    );
     socket.broadcast.emit("new_message", message);
   });
 

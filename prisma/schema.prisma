@@ -32,6 +32,10 @@ model Conversation {
   participants ConversationParticipant[] // Many-to-many relationship
   messages     Message[] // One-to-many relationship with Message
   createdAt    DateTime                  @default(now())
+  updatedAt    DateTime                  @default(now()) @updatedAt
+
+  @@index([createdAt])
+  @@index([updatedAt])
 }
 
 model ConversationParticipant {
@@ -42,6 +46,8 @@ model ConversationParticipant {
   conversation   Conversation @relation(fields: [conversationId], references: [id])
 
   @@unique([userId, conversationId]) // Ensure a user can't join the same conversation twice
+  @@index([userId])
+  @@index([conversationId])
 }
 
 model Message {
@@ -52,4 +58,8 @@ model Message {
   sender         User         @relation(fields: [senderId], references: [id])
   conversation   Conversation @relation(fields: [conversationId], references: [id])
   createdAt      DateTime     @default(now())
+
+  @@index([conversationId])
+  @@index([senderId])
+  @@index([createdAt])
 }
