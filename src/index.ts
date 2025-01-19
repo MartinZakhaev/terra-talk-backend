@@ -3,8 +3,8 @@ import express from "express";
 import cors from "cors";
 import { createServer } from "http";
 import { Server } from "socket.io";
-import { cacheMiddleware } from "../middleware/cache";
-import redisClient from "../utils/redis";
+import { cacheMiddleware } from "./middleware/cache";
+import redisClient from "./utils/redis";
 
 const app = express();
 const server = createServer(app);
