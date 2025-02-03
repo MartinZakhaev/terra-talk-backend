@@ -153,15 +153,27 @@ app.get(
   cacheMiddleware,
   async (req, res) => {
     const { conversationId } = req.params;
+    const { page = 1, limit = 10 } = req.query;
+    const skip = (Number(page) - 1) * Number(limit);
 
     try {
       const messages = await prisma.message.findMany({
         where: { conversationId },
         include: { sender: true },
-        orderBy: { createdAt: "asc" },
+        orderBy: { createdAt: "desc" },
+        take: Number(limit),
+        skip,
       });
 
-      res.json(messages);
+      const total = await prisma.message.count({
+        where: { conversationId },
+      });
+
+      res.json({
+        messages: messages.reverse(),
+        hasMore: skip + messages.length < total,
+        total,
+      });
     } catch (error) {
       res
         .status(500)
